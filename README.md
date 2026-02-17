@@ -41,7 +41,7 @@ make setup
 make verify
 
 # 4. 測試 Alert
-make test-alert     # 或 make test-alert NS=db-b
+make test-alert     # 或 make test-alert TENANT=db-b
 
 # 5. 存取 UI
 make port-forward
@@ -52,44 +52,46 @@ make port-forward
 ## Makefile Targets
 
 ```
-make setup          # 部署全部資源 (Helm + Monitoring)
-make reset          # 清除後重新部署
-make verify         # 驗證 Prometheus 指標
-make test-alert     # 觸發 db-a 故障測試 (NS=db-b 可指定)
-make status         # 顯示所有 Pod 狀態
-make port-forward   # 啟動所有 port-forward
-make shell-db-a     # 進入 db-a MariaDB CLI
-make clean          # 清除 K8s 資源 (保留 cluster)
-make destroy        # 清除資源 + 刪除 cluster
-make helm-template  # 預覽 Helm 產生的 YAML
-make help           # 顯示所有可用 targets
+make setup              # 部署全部資源 (Kind cluster + DB + Monitoring)
+make reset              # 清除後重新部署
+make verify             # 驗證 Prometheus 指標抓取
+make test-alert         # 觸發故障測試 (TENANT=db-b 可指定)
+make test-scenario-a    # Scenario A: 動態閾值
+make test-scenario-b    # Scenario B: 弱環節檢測
+make test-scenario-c    # Scenario C: 狀態字串比對
+make component-build    # Build component image (COMP=threshold-exporter)
+make component-deploy   # Deploy component (COMP=threshold-exporter ENV=local)
+make status             # 顯示所有 Pod 狀態
+make port-forward       # 啟動所有 port-forward
+make shell              # 進入 DB CLI (TENANT=db-a)
+make inspect-tenant     # AI Agent: 檢查 Tenant 健康 (TENANT=db-a)
+make clean              # 清除 K8s 資源 (保留 cluster)
+make destroy            # 清除資源 + 刪除 cluster
+make help               # 顯示所有可用 targets
 ```
 
 ## Project Structure
 
 ```
 .
-├── .devcontainer/
-│   └── devcontainer.json       # Dev Container 配置 (Kind + kubectl + helm)
+├── components/
+│   ├── threshold-exporter/     # 動態閾值 exporter (Helm chart + Go app)
+│   └── kube-state-metrics/     # K8s 狀態 metrics 說明
+├── environments/
+│   ├── local/                  # 本地開發 Helm values
+│   └── ci/                     # CI/CD Helm values
 ├── helm/
-│   ├── mariadb-instance/       # Helm chart: MariaDB + exporter sidecar
-│   │   ├── Chart.yaml
-│   │   ├── values.yaml         # 預設值
-│   │   └── templates/          # deployment, service, pvc, secret, configmaps
-│   ├── values-db-a.yaml        # db-a instance overrides
-│   └── values-db-b.yaml        # db-b instance overrides (不同 seed data)
+│   └── mariadb-instance/       # Helm chart: MariaDB + exporter sidecar
 ├── k8s/
 │   ├── 00-namespaces/          # db-a, db-b, monitoring
 │   └── 03-monitoring/          # Prometheus, Grafana, Alertmanager
-├── scripts/
-│   ├── _lib.sh                 # 共用函式庫 (跨平台相容)
-│   ├── setup.sh                # 一鍵部署
-│   ├── verify.sh               # 驗證 Prometheus 指標
-│   ├── test-alert.sh           # 觸發 DB 故障測試 Alert
-│   └── cleanup.sh              # 清除所有資源
-├── Makefile                    # 操作入口
-├── .gitignore
-├── CLAUDE.md                   # AI Agent 接續開發指引
+├── scripts/                    # 操作腳本 (_lib.sh, setup, verify, cleanup...)
+├── tests/                      # 整合測試 (scenario-a/b/c.sh)
+├── docs/                       # 架構評估文件
+├── .claude/skills/             # AI Agent skills (diagnose-tenant, update-config)
+├── .devcontainer/              # Dev Container 配置
+├── Makefile                    # 操作入口 (make help 查看所有 targets)
+├── CLAUDE.md                   # AI Agent 開發上下文指引
 └── README.md
 ```
 

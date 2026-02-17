@@ -27,5 +27,5 @@
 ### Setup
 - **Renaming**: Project renamed to `dynamic-alerting-integrations`.
 - **Normalization**: Established Prometheus Recording Rules layer (e.g., `tenant:mysql_cpu_usage:rate5m`).
-- **Skills**: Created `inspect-tenant` script for automated health checks.
+- **Skills**: Created `diagnose-tenant` script for automated health checks.
 - **Infrastructure**: Setup Kind cluster, MariaDB sidecars, and basic Monitoring stack.
