@@ -41,6 +41,16 @@
 - **健康檢查**: `make inspect-tenant TENANT=db-a`
 - **Port-Forward**: `make port-forward` (開啟 9090, 3000, 8080)
 
+## AI Agent 環境 (MCP Connectivity)
+- **Kubernetes MCP Server**: 可用。Context: `kind-dynamic-alerting-cluster`。
+  - 支援: `kubectl_get`, `kubectl_apply`, `exec_in_pod`, `kubectl_logs`, `kubectl_scale`, `kubectl_patch` 等全功能。
+  - **動態測試路徑**: exec 進 Prometheus Pod → `wget -qO-` 查詢 API (無需 port-forward)。
+  - **Prometheus 查詢**: `exec_in_pod` → `wget -qO- "http://localhost:9090/api/v1/query?query=<PromQL>"`
+  - **Exporter 查詢**: `exec_in_pod` → `wget -qO- "http://threshold-exporter.monitoring.svc:8080/metrics"`
+- **Windows-MCP**: 可用，但 kubectl/kind 不在 Windows PATH (僅在 Dev Container 內)。
+  - 用途限於: 檔案操作、PowerShell 指令、Docker Desktop 狀態。
+- **注意**: kubeconfig 需從 Dev Container 匯出至 Windows `%USERPROFILE%\.kube\config` 才能讓 Kubernetes MCP 連線。
+
 ## 禁止事項 (Anti-Patterns)
 1. **禁止**修改已廢棄的 `components/threshold-exporter/*.yaml` (請修改 `templates/`)。
 2. **禁止**在 Go code 中寫死 Tenant ID，必須保持租戶無關 (Tenant-agnostic)。

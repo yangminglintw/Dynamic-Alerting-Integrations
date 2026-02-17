@@ -7,6 +7,7 @@ Thumbs.db
 *.swp
 *~
 .fuse_hidden*
+.kubeconfig-export
 
 # --- Go Build Artifacts ---
 # 忽略所有編譯出來的二進制檔

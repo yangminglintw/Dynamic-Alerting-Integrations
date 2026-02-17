@@ -15,7 +15,7 @@
       "kubectl": "latest",
       "helm": "latest"
     },
-    // 3. Node.js (保留原設定)
+    // 3. Node.js (很多 MCP connector 需要)
     "ghcr.io/devcontainers/features/node:1": {
       "version": "lts"
     },
@@ -48,5 +48,8 @@
   },
   
   // 給予容器特權以運行 K8s
-  "runArgs": ["--privileged"]
+  "runArgs": [
+    "--privileged", 
+    "--name", "vibe-dev-container"
+  ]
 }
