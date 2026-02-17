@@ -15,6 +15,15 @@
   - Implemented `tenant:pod_weakest_cpu_percent:max` recording rules.
   - Added container-level thresholds to `threshold-exporter`.
 
+### Infrastructure
+- **kube-state-metrics**: 整合至 `k8s/03-monitoring/deployment-kube-state-metrics.yaml` (v2.10.0)，隨 `make setup` 自動部署。
+- **Deprecated**: `scripts/deploy-kube-state-metrics.sh` (改用標準部署流程)。
+- **setup.sh**: 新增 kube-state-metrics rollout status 等待。
+
+### Verification (Dynamic — via MCP exec_in_pod)
+- **Scenario B**: 端對端驗證通過 — cAdvisor → kube-state-metrics limits → recording rules → alert comparison。db-a CPU 3.1%, Memory 21%; db-b CPU 3.1%, Memory 23%。Alerts 正確保持 inactive (低於閾值)。
+- **Scenario C**: 端對端驗證通過 — 建立 invalid image Pod → ImagePullBackOff → `ContainerImagePullFailure` alert 觸發 (db-a)。刪除 Pod 後 alert 正確解除。Disable 邏輯驗證: db-b 無 `container_crashloop` filter → `ContainerCrashLoop` alert 不觸發。
+
 ## [Week 2] - Config-Driven Architecture (2025-02-16)
 ### Refactor
 - **Threshold Exporter**:

@@ -43,6 +43,7 @@ done
 log "Deploying Monitoring Stack..."
 kubectl apply -f "${K8S_DIR}/03-monitoring/"
 kubectl rollout status deploy/prometheus -n monitoring --timeout=60s
+kubectl rollout status deploy/kube-state-metrics -n monitoring --timeout=60s
 log "✓ Monitoring stack deployed"
 
 log "Setup complete! Run 'make status' to check."

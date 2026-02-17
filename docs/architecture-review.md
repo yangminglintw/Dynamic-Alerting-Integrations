@@ -3,6 +3,7 @@
 > **注意**：本文件為 Week 0 時的評估快照。
 > - Week 1：專案重命名、metric 統一為 `user_threshold`、Prometheus 切換為 kubernetes_sd_configs、recording rules 加入 `sum by(tenant)` 聚合。
 > - Week 2：threshold-exporter 從 HTTP API 重構為 config-driven（YAML ConfigMap + 三態設計），recording rules 移除 fallback。
+> - Week 3：**動態驗證完成** — Scenario B (Weakest Link) 與 Scenario C (State Matching) 通過端對端測試。kube-state-metrics 已整合至 `k8s/03-monitoring/` 標準部署。以下 §1.3 已解決、§1.4/§1.5 已部分解決。
 > 最新狀態請參考 `CLAUDE.md`。
 
 ## Executive Summary
@@ -94,17 +95,11 @@ scrape_configs:
         target_label: tenant
 ```
 
-#### 1.3 【High】缺少 kube-state-metrics
+#### 1.3 ~~【High】缺少 kube-state-metrics~~ ✅ 已解決 (Week 3)
 
-**問題**:
-- Scenario C 需要 pod phase, container status 等 K8s 原生指標
-- 目前環境只有 MySQL 指標
-
-**建議**:
-```bash
-# 立即加入（非常輕量）
-helm install kube-state-metrics prometheus-community/kube-state-metrics -n monitoring
-```
+> **已修復**: kube-state-metrics v2.10.0 已整合至 `k8s/03-monitoring/deployment-kube-state-metrics.yaml`，隨 `make setup` 自動部署。
+> - Scenario B 資料鏈驗證: cAdvisor → resource limits → `tenant:pod_weakest_cpu_percent:max` ✓
+> - Scenario C 資料鏈驗證: ImagePullBackOff → `tenant:container_waiting_reason:count` × `user_state_filter` → Alert 觸發/解除 ✓
 
 #### 1.4 【Medium】Alert 測試策略不完整
 
@@ -787,9 +782,7 @@ rm ${OUTPUT_JSON}
    - 這是 Dynamic Alerting 的核心
    - 建議時程：Week 1-2
 
-2. **加入 kube-state-metrics**
-   - `helm install kube-state-metrics ...` (30 分鐘內完成)
-   - 沒有它就無法實作 Scenario C
+2. ~~**加入 kube-state-metrics**~~ ✅ 已完成 (Week 3, 整合至標準部署)
 
 3. **重構 Alert Rules → Recording Rules**
    - 建立 Normalization Layer
