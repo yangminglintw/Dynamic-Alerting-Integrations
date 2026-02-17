@@ -1,3 +1,0 @@
-# DEPRECATED: This file is no longer used.
-# Helm templates are now in templates/deployment.yaml
-# Deploy with: make component-deploy COMP=threshold-exporter ENV=local
