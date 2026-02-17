@@ -2,41 +2,51 @@
   "name": "Dynamic Alerting Integrations",
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
   "features": {
-    // 1. 啟用 Docker-in-Docker (這是跑 Kind 的核心)
+    // 1. Docker-in-Docker (Kind 核心)
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
       "version": "latest",
       "enableNonRootDocker": "true",
       "moby": "true"
     },
-    // 2. 自動安裝 K8s 工具
+    // 2. K8s 工具 (kubectl, helm)
     "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {
       "version": "latest",
       "minikube": "none",
       "kubectl": "latest",
       "helm": "latest"
     },
+    // 3. Node.js (保留原設定)
     "ghcr.io/devcontainers/features/node:1": {
       "version": "lts"
     },
-    // 3. Go (threshold-exporter 開發用)
+    // 4. Go (threshold-exporter 開發用)
     "ghcr.io/devcontainers/features/go:1": {
       "version": "1.21"
+    },
+    // 5. Python (確保有 pip)
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.10",
+      "installTools": true
     }
   },
   
-  // 3. 環境建立後的自動化指令 (自動安裝 Kind)
-  "postCreateCommand": "curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64 && chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind && kind create cluster --name dynamic-alerting-cluster",
+  // [UPDATED] 環境建立後的自動化指令：
+  // 1. 安裝 PyYAML
+  // 2. 安裝 Kind
+  // 3. 建立 Cluster
+  "postCreateCommand": "pip3 install pyyaml && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64 && chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind && kind create cluster --name dynamic-alerting-cluster",
 
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-kubernetes-tools.vscode-kubernetes-tools",
         "ms-azuretools.vscode-docker",
-        "redhat.vscode-yaml"
+        "redhat.vscode-yaml",
+        "ms-python.python" 
       ]
     }
   },
   
-  // 4. 給予容器特權以運行 K8s
+  // 給予容器特權以運行 K8s
   "runArgs": ["--privileged"]
 }
