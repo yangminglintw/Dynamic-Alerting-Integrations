@@ -23,7 +23,8 @@ Kind Cluster: dynamic-alerting-cluster (K8s v1.27.3, 單 control-plane node)
 └─ namespace: monitoring
    ├─ Deployment: prometheus (prom/prometheus:v2.53.0) — port 9090
    ├─ Deployment: grafana (grafana/grafana:11.1.0) — port 3000 (NodePort 30300)
-   └─ Deployment: alertmanager (prom/alertmanager:v0.27.0) — port 9093
+   ├─ Deployment: alertmanager (prom/alertmanager:v0.27.0) — port 9093
+   └─ Deployment: threshold-exporter — port 8080 (config-driven)
 ```
 
 ### 已驗證的指標
@@ -52,55 +53,118 @@ Kind Cluster: dynamic-alerting-cluster (K8s v1.27.3, 單 control-plane node)
 ### 操作指令 (Makefile)
 
 ```bash
-make setup          # 部署所有資源 (Helm + Monitoring)
-make reset          # 清除重建
-make verify         # 驗證 Prometheus 指標
-make test-alert     # 觸發 db-a 故障測試 (NS=db-b 可指定)
-make status         # 顯示所有 Pod 狀態
-make port-forward   # 啟動所有 port-forward
-make shell-db-a     # 進入 db-a MariaDB CLI
-make clean          # 清除 K8s 資源
-make destroy        # 清除 + 刪除 cluster
-make helm-template  # 預覽 Helm YAML
-make help           # 顯示所有 targets
+make setup              # 部署所有資源 (Helm + Monitoring)
+make reset              # 清除重建
+make verify             # 驗證 Prometheus 指標
+make test-alert         # 觸發 db-a 故障測試 (NS=db-b 可指定)
+make test-scenario-a    # Scenario A 端到端測試 (TENANT=db-a)
+make status             # 顯示所有 Pod 狀態
+make port-forward       # 啟動所有 port-forward (含 threshold-exporter)
+make shell-db-a         # 進入 db-a MariaDB CLI
+make clean              # 清除 K8s 資源
+make destroy            # 清除 + 刪除 cluster
+make helm-template      # 預覽 Helm YAML
+make help               # 顯示所有 targets
+
+# Component 管理
+make component-build COMP=threshold-exporter   # Build & load to Kind
+make component-deploy COMP=threshold-exporter  # Deploy to cluster
+make component-test COMP=threshold-exporter    # Run integration test
 ```
 
 ### 存取 UI
 
 ```bash
 make port-forward
-# Prometheus:   http://localhost:9090
-# Grafana:      http://localhost:3000 (admin / admin)
-# Alertmanager: http://localhost:9093
+# Prometheus:          http://localhost:9090
+# Grafana:             http://localhost:3000 (admin / admin)
+# Alertmanager:        http://localhost:9093
+# Threshold-Exporter:  http://localhost:8080/metrics
 ```
 
 ## 部署架構
 
 MariaDB 透過 Helm chart 部署：`helm/mariadb-instance/` chart + `helm/values-db-{a,b}.yaml`。兩個 DB instance 共用 template，僅 seed data 不同。Monitoring stack 使用純 YAML（`k8s/03-monitoring/`）。
 
-## Spec 核心需求（待實作）
+## Threshold-Exporter 架構設計
+
+### 核心設計決策
+
+threshold-exporter 是一個**集中式、config-driven**的 Prometheus metric exporter：
+
+1. **單一 Pod**：部署在 monitoring namespace，不跟隨 tenant 擴增。一個 Pod 服務所有 tenant 的閾值。
+2. **YAML config 驅動**：透過 ConfigMap 掛載 YAML 檔，定義 defaults 和 per-tenant overrides。不使用 HTTP API 寫入。
+3. **三態設計** (per tenant, per metric)：
+   - **Custom value** — 明確設定數值（例：`"70"`）
+   - **Default** — 省略不寫，自動套用 `defaults` 區塊的值
+   - **Disable** — 設為 `"disable"`，不暴露該 metric，alert 不觸發
+4. **Config hot-reload**：exporter 定期檢查 config 檔變更，不需要重啟 Pod。
+5. **Default resolution 在 exporter 層**：Prometheus recording rules 不需要 fallback 邏輯。
+
+### Config 格式
+
+```yaml
+# components/threshold-exporter/config/threshold-config.yaml
+defaults:
+  mysql_connections: 80     # Scenario A
+  mysql_cpu: 80             # Scenario A
+  # container_cpu_percent: 90   # Scenario B (未來)
+
+tenants:
+  db-a:
+    mysql_connections: "70"       # custom
+    # mysql_cpu 省略               # → default 80
+  db-b:
+    mysql_connections: "disable"  # disabled → no alert
+    mysql_cpu: "40"              # custom
+```
+
+### Metric key 命名規則
+
+`<component>_<metric>` → 暴露為 `user_threshold{tenant="...", metric="...", component="...", severity="..."}`
+
+例：`mysql_connections` → `component="mysql"`, `metric="connections"`
+
+### 修改閾值的工作流
+
+```
+修改 YAML → kubectl apply ConfigMap → exporter reload → Prometheus scrape → recording rule 更新 → alert 觸發/解除
+```
+
+不需要重啟任何 Pod。`helm upgrade` 或直接 `kubectl apply` ConfigMap 都可以。
+
+### 為何選擇這個架構
+
+- **不做 per-tenant sidecar**：Pod 數量不隨 tenant 線性增長，避免撞到 node 的 Pod 上限。
+- **不做 HTTP API 寫入**：config 即代碼，可版控、可 review、可 GitOps。
+- **不做 Prometheus fallback**：exporter 已 resolve 所有 default，recording rules 純粹 pass-through，PromQL 更簡潔。
+- **Disable 透過 metric 缺席實現**：`group_left` join 對不存在的 metric 自然產生空結果 = 不觸發 alert。
+
+## Spec 核心需求
 
 參考 spec.md，這個測試環境的最終目標是驗證以下 Dynamic Alerting 模式：
 
-### Scenario A: Dynamic Thresholds（動態閾值）
+### Scenario A: Dynamic Thresholds（動態閾值）✅ Week 2 實作完成
 
 - Config Metric: `user_threshold{tenant, component, metric, severity}`（統一 gauge）
-- threshold-exporter 將使用者設定的閾值暴露為 Prometheus metric
-- Recording rules 產生 `tenant:alert_threshold:cpu` / `tenant:alert_threshold:connections`
+- threshold-exporter 讀取 ConfigMap YAML，resolve 三態邏輯，暴露 Prometheus metric
+- Recording rules 透傳 `tenant:alert_threshold:cpu` / `tenant:alert_threshold:connections`（無 fallback）
 - Alert rules 使用 `group_left on(tenant)` join normalized metrics 與 thresholds
-- **目前狀態**：Recording rules + Alert rules 已就緒，threshold-exporter 待實作
+- **目前狀態**：Go 實作完成，Helm chart + ConfigMap + tests 就緒
 
 ### Scenario B: Weakest Link Detection（最弱環節偵測）
 
 - 監控 Pod 內個別 container 的資源使用
 - 保留 container dimension 做聚合
 - 當任一 container 超標即觸發
+- 閾值可透過同一個 threshold-exporter 管理（新增 `container_cpu_percent` 等 key 到 config）
 - **目前狀態**：尚未實作
 
 ### Scenario C: State/String Matching（狀態字串比對）
 
 - 比對 K8s pod phase（CrashLoopBackOff, ImagePullBackOff 等）
 - 用乘法運算做交集邏輯
+- Config 需要支援非 numeric 的 state filter（設計方向：獨立 `state_filters:` section）
 - **目前狀態**：kube-state-metrics 已部署，提供 pod phase / container status 指標
 
 ### Scenario D: Composite Priority Logic（組合優先級邏輯）
@@ -109,12 +173,10 @@ MariaDB 透過 Helm chart 部署：`helm/mariadb-instance/` chart + `helm/values
 - 使用 `unless` 排除已匹配條件，`or` 做聯集
 - **目前狀態**：尚未實作
 
-## 下一步建議
+## 下一步
 
-1. **實作 threshold-exporter**：在獨立 repo 開發 Go HTTP server，暴露 `user_threshold` gauge metric
-2. **整合驗證 Scenario A**：部署 threshold-exporter → 設定閾值 → 驗證 recording rules 傳遞 → alert 觸發/解除
-3. **擴充 MariaDB 指標**：啟用更多 mysqld_exporter collector（`--collect.perf_schema.*`），為 Scenario B 做準備
-4. **實作 Scenario C alert rules**：利用已部署的 kube-state-metrics，建立 pod phase 比對規則
+- **Week 3**: Scenario B (Weakest Link) alert rules + Scenario C (State Matching) alert rules
+- **Week 4**: Scenario D (Composite Priority) + 整合測試自動化 + Tilt 引入
 
 ## 技術限制與注意事項
 
@@ -132,9 +194,19 @@ MariaDB 透過 Helm chart 部署：`helm/mariadb-instance/` chart + `helm/values
 ├── .claude/skills/                   # AI Agent skills
 │   └── inspect-tenant/              # Tenant 健康檢查
 ├── components/                       # Sub-component Helm charts
-│   ├── threshold-exporter/          # Scenario A (Helm chart)
-│   ├── config-api/                  # 待實作
-│   └── alert-router/                # 待實作
+│   └── threshold-exporter/          # Scenario A
+│       ├── Chart.yaml               # Helm chart metadata
+│       ├── values.yaml              # Default values (含 thresholdConfig)
+│       ├── templates/               # K8s templates (deployment, service, configmap)
+│       ├── config/                  # Reference config files
+│       │   └── threshold-config.yaml
+│       └── app/                     # Go source code
+│           ├── main.go              # HTTP server + entrypoint
+│           ├── config.go            # YAML config loader + three-state resolver
+│           ├── collector.go         # Prometheus collector
+│           ├── config_test.go       # Unit tests
+│           ├── Dockerfile           # Multi-stage build
+│           └── go.mod
 ├── environments/                     # 環境配置分離
 │   ├── local/                       # 本地開發 (pullPolicy: Never)
 │   └── ci/                          # CI/CD (image registry)
@@ -153,8 +225,8 @@ MariaDB 透過 Helm chart 部署：`helm/mariadb-instance/` chart + `helm/values
 │   ├── deploy-kube-state-metrics.sh # kube-state-metrics 部署
 │   └── cleanup.sh                   # 清除資源
 ├── tests/                            # 整合測試
-│   ├── scenario-a.sh                # Dynamic Thresholds 測試
-│   └── verify-threshold-exporter.sh # Exporter 驗證
+│   ├── scenario-a.sh                # Dynamic Thresholds 端到端測試
+│   └── verify-threshold-exporter.sh # Exporter 功能驗證
 ├── docs/                             # 文檔
 ├── Makefile                          # 操作入口 (make help 查看)
 ├── CLAUDE.md                         # ← 你正在讀的這份
@@ -169,6 +241,7 @@ MariaDB 透過 Helm chart 部署：`helm/mariadb-instance/` chart + `helm/values
 - `_lib.sh` 提供跨平台函式：`kill_port`（lsof→fuser→ss fallback）、`url_encode`（python3→sed fallback）、`preflight_check`
 - Prometheus scrape config 使用 kubernetes_sd_configs + annotation-based discovery（`prometheus.io/scrape: "true"`）
 - 新增 tenant/component 不需要修改 Prometheus ConfigMap
+- Go code 使用標準 `flag` + `os.Getenv` 配置，`gopkg.in/yaml.v3` 解析 config
 - Makefile targets 對應每個常用操作，`make help` 查看完整列表
 
 ## Week 1 更新 (完成)
@@ -176,7 +249,7 @@ MariaDB 透過 Helm chart 部署：`helm/mariadb-instance/` chart + `helm/values
 ### 新增功能
 
 1. **模塊化目錄結構**
-   - `components/` - Sub-component manifests (threshold-exporter, config-api, alert-router)
+   - `components/` - Sub-component manifests (threshold-exporter)
    - `environments/` - 環境配置 (local vs ci)
    - `tests/` - 整合測試腳本
    - `.claude/skills/` - AI Agent skills
@@ -210,10 +283,39 @@ MariaDB 透過 Helm chart 部署：`helm/mariadb-instance/` chart + `helm/values
    - 支援 Scenario C (State Matching)
    - 部署: `./scripts/deploy-kube-state-metrics.sh`
 
+## Week 2 更新 (完成)
+
+### threshold-exporter 實作
+
+1. **Go 應用程式** (`components/threshold-exporter/app/`)
+   - `config.go` — YAML config loader + 三態解析 (custom/default/disable)
+   - `collector.go` — Prometheus Collector，每次 scrape 即時 resolve config
+   - `main.go` — HTTP server (/metrics, /health, /ready, /api/v1/config)
+   - `config_test.go` — 完整 unit tests 覆蓋三態邏輯
+   - `Dockerfile` — Multi-stage build (golang:1.21-alpine → alpine:3.19)
+
+2. **Helm chart 重構**
+   - 新增 `templates/configmap.yaml` — threshold config 透過 ConfigMap 掛載
+   - Deployment 使用 `checksum/config` annotation 確保 config 變更時自動重啟
+   - 移除舊的 HTTP API 模式（config.logLevel, config.storage），改為 exporter.* 配置
+
+3. **Prometheus recording rules 簡化**
+   - 移除 `or (max by(tenant) (mysql_up) * 80)` fallback 邏輯
+   - Recording rules 現在純粹 pass-through exporter 的 resolved values
+   - Default resolution 完全在 exporter 層完成
+
+4. **測試腳本更新**
+   - `tests/scenario-a.sh` — 改用 `kubectl apply` ConfigMap 動態修改閾值（不再用 HTTP POST）
+   - `tests/verify-threshold-exporter.sh` — 驗證三態邏輯、config reload、metrics 暴露
+
+5. **Makefile 更新**
+   - `make test-scenario-a` — Scenario A 端到端測試
+   - `make component-build` — 支援 in-repo build（`components/*/app/`）
+   - `make port-forward` — 含 threshold-exporter (8080)
+
 ### 下一步
 
-- **Week 2**: 實作 threshold-exporter (獨立 repo)，Scenario A 端到端驗證
-- **Week 3**: Scenario B/C alert rules，引入 Tilt 開發工具
-- **Week 4**: Scenario D + 整合測試自動化
+- **Week 3**: Scenario B (Weakest Link) + Scenario C (State Matching) alert rules
+- **Week 4**: Scenario D (Composite Priority) + 整合測試自動化 + Tilt 引入
 
 詳細說明請參考：[docs/deployment-guide.md](docs/deployment-guide.md)

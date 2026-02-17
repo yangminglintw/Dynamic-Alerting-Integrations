@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: threshold-config
+  namespace: monitoring
+  labels:
+    app: threshold-exporter
+data:
+  config.yaml: |
+    {{- .Values.thresholdConfig | toYaml | nindent 4 }}

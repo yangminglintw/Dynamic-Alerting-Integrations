@@ -1,0 +1,41 @@
+# ============================================================
+# Threshold Configuration — Dynamic Alerting Integrations
+# ============================================================
+#
+# This file defines alerting thresholds for all tenants.
+# The threshold-exporter reads this file and exposes the resolved
+# values as Prometheus metrics: user_threshold{tenant, metric, component, severity}
+#
+# Three-State Design (per tenant, per metric):
+#   1. Custom value  — set a number (e.g., "70")
+#   2. Default        — omit the key; the value from 'defaults' is used
+#   3. Disable        — set "disable"; no metric is exposed, no alert fires
+#
+# Optional severity override:
+#   Use "value:severity" format (e.g., "50:critical")
+#   If omitted, severity defaults to "warning"
+#
+# Metric key convention:
+#   <component>_<metric>  e.g., "mysql_connections" → component="mysql", metric="connections"
+#
+# ============================================================
+
+# Global defaults — applied to all tenants unless overridden
+defaults:
+  # Scenario A: MySQL thresholds
+  mysql_connections: 80     # max thread connections before alert
+  mysql_cpu: 80             # threads_running rate threshold
+
+  # Scenario B: Container resource thresholds (Week 3)
+  # container_cpu_percent: 90
+  # container_memory_percent: 85
+
+# Per-tenant overrides
+tenants:
+  db-a:
+    mysql_connections: "70"       # custom: alert at 70 connections
+    # mysql_cpu: omitted          # → uses default (80)
+
+  db-b:
+    mysql_connections: "100"      # custom: more relaxed threshold
+    mysql_cpu: "60"               # custom: stricter CPU threshold

@@ -18,25 +18,35 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "{{ .Values.service.port }}"
         prometheus.io/path: "/metrics"
+        # Force rolling restart when config changes
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     spec:
       containers:
       - name: threshold-exporter
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
+        args:
+          - "-config"
+          - "/etc/threshold-exporter/config.yaml"
+          - "-listen"
+          - "{{ .Values.exporter.listenAddr }}"
+          - "-reload-interval"
+          - "{{ .Values.exporter.reloadInterval }}"
         ports:
         - name: http
           containerPort: {{ .Values.service.port }}
           protocol: TCP
-        env:
-        - name: PORT
-          value: "{{ .Values.service.port }}"
-        - name: LOG_LEVEL
-          value: "{{ .Values.config.logLevel }}"
-        - name: STORAGE_TYPE
-          value: "{{ .Values.config.storage.type }}"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/threshold-exporter
+          readOnly: true
         livenessProbe:
           {{- toYaml .Values.livenessProbe | nindent 10 }}
         readinessProbe:
           {{- toYaml .Values.readinessProbe | nindent 10 }}
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
+      volumes:
+      - name: config
+        configMap:
+          name: threshold-config

@@ -1,5 +1,9 @@
 # Getting Started — threshold-exporter 使用指南
 
+> **注意**：本文件為 Week 1 初版，使用 HTTP API 模式。Week 2 已重構為 **config-driven 架構**
+> （YAML ConfigMap + 三態設計）。HTTP API 設定閾值的方式已移除。
+> 最新用法請參考 `components/threshold-exporter/README.md` 和 `CLAUDE.md`。
+
 ## 🎯 快速開始
 
 ### 前提條件

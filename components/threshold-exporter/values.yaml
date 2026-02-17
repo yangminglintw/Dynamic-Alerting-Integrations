@@ -4,7 +4,7 @@ replicaCount: 1
 image:
   repository: threshold-exporter
   tag: dev
-  pullPolicy: Never
+  pullPolicy: Never    # Local dev: use 'kind load docker-image'
 
 service:
   type: ClusterIP
@@ -14,13 +14,24 @@ service:
     prometheus.io/port: "8080"
     prometheus.io/path: "/metrics"
 
-config:
-  logLevel: debug
-  storage:
-    type: memory
-  server:
-    port: 8080
-    host: "0.0.0.0"
+# Exporter runtime config
+exporter:
+  listenAddr: ":8080"
+  reloadInterval: "30s"    # How often to check config file for changes
+
+# Threshold config (embedded in ConfigMap)
+# This is the actual alerting threshold configuration.
+# See config/threshold-config.yaml for the reference format.
+thresholdConfig:
+  defaults:
+    mysql_connections: 80
+    mysql_cpu: 80
+  tenants:
+    db-a:
+      mysql_connections: "70"
+    db-b:
+      mysql_connections: "100"
+      mysql_cpu: "60"
 
 resources:
   requests:

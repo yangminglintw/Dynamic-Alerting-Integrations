@@ -1,8 +1,9 @@
 # Dynamic Alerting Integrations 架構評估與改進建議
 
-> **注意**：本文件為 Week 0 時的評估快照。部分建議已在 Week 1 實作並進一步修正。
-> 主要差異：專案已重命名、metric 統一為 `user_threshold`、Prometheus 已切換為 kubernetes_sd_configs、
-> recording rules 已加入 `sum by(tenant)` 聚合。最新狀態請參考 `CLAUDE.md`。
+> **注意**：本文件為 Week 0 時的評估快照。
+> - Week 1：專案重命名、metric 統一為 `user_threshold`、Prometheus 切換為 kubernetes_sd_configs、recording rules 加入 `sum by(tenant)` 聚合。
+> - Week 2：threshold-exporter 從 HTTP API 重構為 config-driven（YAML ConfigMap + 三態設計），recording rules 移除 fallback。
+> 最新狀態請參考 `CLAUDE.md`。
 
 ## Executive Summary
 

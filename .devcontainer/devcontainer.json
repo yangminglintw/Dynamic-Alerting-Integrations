@@ -14,6 +14,13 @@
       "minikube": "none",
       "kubectl": "latest",
       "helm": "latest"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "lts"
+    },
+    // 3. Go (threshold-exporter 開發用)
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.21"
     }
   },
   

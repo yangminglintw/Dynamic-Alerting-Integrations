@@ -1,8 +1,8 @@
 # Week 1 實作完成摘要
 
-> **注意**：本文件為 Week 1 初版快照。後續修正包括：recording-rules.yml 掛載修復、
-> label 聚合對齊（`sum by(tenant)`）、metric 統一為 `user_threshold`、
-> threshold-exporter 轉為完整 Helm chart、Prometheus 遷移至 kubernetes_sd_configs。
+> **注意**：本文件為 Week 1 初版快照。
+> - Week 1 修正：recording-rules.yml 掛載修復、label 聚合對齊（`sum by(tenant)`）、metric 統一為 `user_threshold`、threshold-exporter 轉為完整 Helm chart、Prometheus 遷移至 kubernetes_sd_configs。
+> - Week 2 重構：threshold-exporter 從 HTTP API 改為 config-driven（YAML ConfigMap + 三態設計），recording rules 移除 fallback 邏輯。
 > 最新狀態請參考 `CLAUDE.md`。
 
 ## 🎯 完成項目

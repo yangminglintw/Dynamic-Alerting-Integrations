@@ -126,23 +126,18 @@ data:
       - name: threshold-normalization
         interval: 15s
         rules:
-          # 統一 metric 名稱: user_threshold{tenant, metric, severity}
-          # threshold-exporter 暴露 user_threshold gauge
-          # fallback: 若尚未設定，使用預設值 80
+          # threshold-exporter 暴露 user_threshold gauge (config-driven)
+          # 三態設計: custom value / default / disable
+          # Default resolution 在 exporter 層完成，此處不需要 fallback 邏輯。
+          # Disabled metrics 不會被暴露，group_left join 自然產生空結果 = 不觸發 alert。
 
-          # CPU 閾值 (預設 80)
+          # CPU 閾值 (直接透傳 exporter 的 resolved value)
           - record: tenant:alert_threshold:cpu
-            expr: |
-              sum by(tenant) (user_threshold{metric="cpu"})
-              or
-              (max by(tenant) (mysql_up) * 80)
+            expr: sum by(tenant) (user_threshold{metric="cpu"})
 
-          # 連線數閾值 (預設 80)
+          # 連線數閾值 (直接透傳 exporter 的 resolved value)
           - record: tenant:alert_threshold:connections
-            expr: |
-              sum by(tenant) (user_threshold{metric="connections"})
-              or
-              (max by(tenant) (mysql_up) * 80)
+            expr: sum by(tenant) (user_threshold{metric="connections"})
 
   # Alert Rules (使用 normalized metrics)
   alert-rules.yml: |

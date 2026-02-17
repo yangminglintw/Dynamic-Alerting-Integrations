@@ -33,6 +33,10 @@ verify: ## 驗證 Prometheus 指標抓取
 test-alert: ## 觸發 db-a 故障並驗證 Alert (可用 NS=db-b 指定)
 	@./scripts/test-alert.sh $(or $(NS),db-a)
 
+.PHONY: test-scenario-a
+test-scenario-a: ## Scenario A 端到端測試: 動態閾值觸發/解除 (TENANT=db-a)
+	@./tests/scenario-a.sh $(or $(TENANT),db-a)
+
 # ----------------------------------------------------------
 # Helm 工具
 # ----------------------------------------------------------
@@ -80,10 +84,12 @@ port-forward: ## 啟動所有 port-forward (Prometheus:9090, Grafana:3000, Alert
 	@kubectl port-forward -n monitoring svc/prometheus 9090:9090 &
 	@kubectl port-forward -n monitoring svc/grafana 3000:3000 &
 	@kubectl port-forward -n monitoring svc/alertmanager 9093:9093 &
+	@kubectl port-forward -n monitoring svc/threshold-exporter 8080:8080 2>/dev/null &
 	@echo ""
-	@echo "  Prometheus:   http://localhost:9090"
-	@echo "  Grafana:      http://localhost:3000  (admin/admin)"
-	@echo "  Alertmanager: http://localhost:9093"
+	@echo "  Prometheus:          http://localhost:9090"
+	@echo "  Grafana:             http://localhost:3000  (admin/admin)"
+	@echo "  Alertmanager:        http://localhost:9093"
+	@echo "  Threshold-Exporter:  http://localhost:8080/metrics"
 	@echo ""
 	@wait
 
@@ -101,12 +107,17 @@ shell-db-b: ## 進入 db-b MariaDB CLI
 .PHONY: component-build
 component-build: ## Build component image and load into Kind (COMP=threshold-exporter)
 	@echo "Building $(COMP)..."
-	@if [ ! -d "../$(COMP)" ]; then \
-		echo "Error: ../$(COMP) not found"; \
-		echo "Hint: git clone your component repo to ../$(COMP)"; \
+	@if [ -d "components/$(COMP)/app" ]; then \
+		echo "Building from components/$(COMP)/app/ (in-repo)"; \
+		cd components/$(COMP)/app && docker build -t $(COMP):dev .; \
+	elif [ -d "../$(COMP)" ]; then \
+		echo "Building from ../$(COMP)/ (external repo)"; \
+		cd ../$(COMP) && docker build -t $(COMP):dev .; \
+	else \
+		echo "Error: No source found for $(COMP)"; \
+		echo "Expected: components/$(COMP)/app/ or ../$(COMP)/"; \
 		exit 1; \
 	fi
-	cd ../$(COMP) && docker build -t $(COMP):dev .
 	kind load docker-image $(COMP):dev --name $(CLUSTER)
 	@echo "✓ $(COMP):dev loaded into Kind cluster"
 

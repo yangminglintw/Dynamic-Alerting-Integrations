@@ -1,5 +1,9 @@
 # Dynamic Alerting Integrations — 部署指南
 
+> **注意**：本文件為 Week 1 初版。threshold-exporter 已在 Week 2 重構為 **config-driven 架構**
+> （YAML ConfigMap + 三態設計）。文中 HTTP API 設定閾值的段落已過時。
+> 最新部署流程請參考 `components/threshold-exporter/README.md` 和 `CLAUDE.md`。
+
 ## 概述
 
 本專案已完成 Week 1 重構，新增以下功能：
