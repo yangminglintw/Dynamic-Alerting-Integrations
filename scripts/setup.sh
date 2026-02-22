@@ -47,3 +47,18 @@ kubectl rollout status deploy/kube-state-metrics -n monitoring --timeout=60s
 log "✓ Monitoring stack deployed"
 
 log "Setup complete! Run 'make status' to check."
+
+# 5. 部署 Threshold Exporter (核心元件)
+log "Building and Deploying Threshold Exporter..."
+
+# 5.1 編譯最新影像檔
+log "Building image: threshold-exporter:dev..."
+docker build -t threshold-exporter:dev "${PROJECT_ROOT}/components/threshold-exporter/app"
+
+# [新增] 5.1.5 將映像檔存成純 tar 檔
+log "Exporting image to archive..."
+docker save -o /tmp/threshold-exporter.tar threshold-exporter:dev
+
+# 5.2 從 tar 檔載入到 Kind (這樣 Kind 就不會去比對 Docker 的清單了)
+log "Loading image archive into Kind cluster..."
+kind load image-archive /tmp/threshold-exporter.tar --name "${CLUSTER_NAME}"

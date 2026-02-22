@@ -71,6 +71,11 @@ type ResolvedThreshold struct {
 //   - omitted      → use default
 //   - "disable"    → skip (no metric exposed)
 //
+// Multi-tier severity: tenants can set <metric>_critical in their overrides
+// to expose a separate critical-severity threshold for the same metric.
+// The base metric retains severity=warning; the _critical variant gets severity=critical.
+// PromQL can then use `unless` to suppress warning when critical fires.
+//
 // Returns the list of thresholds to expose as Prometheus metrics.
 func (c *ThresholdConfig) Resolve() []ResolvedThreshold {
 	var result []ResolvedThreshold
@@ -126,6 +131,40 @@ func (c *ThresholdConfig) Resolve() []ResolvedThreshold {
 				Severity:  severity,
 				Component: component,
 			})
+		}
+
+		// Multi-tier severity: scan for <metricKey>_critical overrides.
+		// These produce an additional threshold with severity=critical.
+		for key, override := range overrides {
+			if !strings.HasSuffix(key, "_critical") || strings.HasPrefix(key, "_state_") {
+				continue
+			}
+
+			lower := strings.TrimSpace(strings.ToLower(override))
+			if isDisabled(lower) {
+				continue
+			}
+
+			// Derive the base metric key: "mysql_connections_critical" → "mysql_connections"
+			baseKey := strings.TrimSuffix(key, "_critical")
+			// Verify that the base metric exists in defaults (otherwise ignore)
+			if _, exists := c.Defaults[baseKey]; !exists {
+				log.Printf("WARN: _critical key %q has no matching default %q, skipping", key, baseKey)
+				continue
+			}
+
+			component, metric := parseMetricKey(baseKey)
+			if v, err := strconv.ParseFloat(strings.TrimSpace(override), 64); err == nil {
+				result = append(result, ResolvedThreshold{
+					Tenant:    tenant,
+					Metric:    metric,
+					Value:     v,
+					Severity:  "critical",
+					Component: component,
+				})
+			} else {
+				log.Printf("WARN: invalid critical threshold %q for tenant=%s key=%s", override, tenant, key)
+			}
 		}
 	}
 

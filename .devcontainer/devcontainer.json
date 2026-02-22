@@ -34,7 +34,7 @@
   // 1. 安裝 PyYAML
   // 2. 安裝 Kind
   // 3. 建立 Cluster
-  "postCreateCommand": "pip3 install pyyaml && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64 && chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind && kind create cluster --name dynamic-alerting-cluster",
+  "postCreateCommand": "pip3 install --user pyyaml && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64 && chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind && bash -c 'while ! docker info >/dev/null 2>&1; do sleep 2; done; kind create cluster --name dynamic-alerting-cluster'",
 
   "customizations": {
     "vscode": {

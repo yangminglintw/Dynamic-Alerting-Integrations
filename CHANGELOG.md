@@ -1,10 +1,10 @@
 # Changelog
 
-## [Unreleased] - Week 4: Composite Priority Logic
-- **Goal**: Implement Scenario D — 解決 Alert Fatigue，透過 PromQL 集合運算子實作進階警報邏輯。
-- **Phase 1**: 維護模式 (`unless`) — ConfigMap 加 `maintenance` state_filter，PromQL 攔截所有常規警報。不改 Go。
-- **Phase 2**: 複合警報 (`and`) — `MariaDBSystemBottleneck` = 高 CPU **且**高連線數同時觸發。閾值皆來自 ConfigMap。
-- **Phase 3**: 多層級嚴重度 — 同一指標支援 warning/critical 雙閾值（租戶指定確切數值），Go 新增 `_critical` 後綴解析。`unless` 降級排他。
+## [Week 4] - Composite Priority Logic (2026-02-22)
+### Scenario D: Alert Fatigue 解法
+- **Phase 1 — 維護模式**: Go `StateFilter` 新增 `default_state` 欄位 (opt-in model)。`maintenance` filter 預設停用，租戶設 `_state_maintenance: enable` 啟用。PromQL 5 條 alert rules 加 `unless on(tenant) (user_state_filter{filter="maintenance"} == 1)` 抑制。Hot-reload 驗證通過。
+- **Phase 2 — 複合警報**: 新增 `MariaDBSystemBottleneck` alert，使用 PromQL `and` 要求高連線數**且**高 CPU 同時觸發，severity=critical。含 maintenance 抑制。
+- **Phase 3 — 多層級嚴重度**: Go `Resolve()` 支援 `<metric>_critical` 後綴，產生 `severity="critical"` 的獨立 threshold metric。Recording rules 新增 `tenant:alert_threshold:connections_critical` / `cpu_critical`。新增 `MariaDBHighConnectionsCritical` alert。Warning alert 含 `unless` 降級邏輯（critical 觸發時自動抑制 warning）。
 
 ### Pre-Scenario D Refactoring (2026-02-22)
 #### Test Scripts — ConfigMap 覆寫技術債清理

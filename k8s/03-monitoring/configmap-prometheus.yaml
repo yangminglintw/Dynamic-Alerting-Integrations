@@ -163,10 +163,17 @@ data:
         rules:
           # Scenario A: MySQL thresholds
           - record: tenant:alert_threshold:cpu
-            expr: sum by(tenant) (user_threshold{metric="cpu"})
+            expr: sum by(tenant) (user_threshold{metric="cpu", severity="warning"})
 
           - record: tenant:alert_threshold:connections
-            expr: sum by(tenant) (user_threshold{metric="connections"})
+            expr: sum by(tenant) (user_threshold{metric="connections", severity="warning"})
+
+          # Scenario D: Multi-tier severity — critical thresholds (optional, per-tenant)
+          - record: tenant:alert_threshold:connections_critical
+            expr: sum by(tenant) (user_threshold{metric="connections", severity="critical"})
+
+          - record: tenant:alert_threshold:cpu_critical
+            expr: sum by(tenant) (user_threshold{metric="cpu", severity="critical"})
 
           # Scenario B: Container resource thresholds
           - record: tenant:alert_threshold:container_cpu
@@ -273,12 +280,62 @@ data:
               )
               unless on(tenant)
               (user_state_filter{filter="maintenance"} == 1)
+              unless on(tenant)
+              (
+                tenant:mysql_threads_connected:sum
+                > on(tenant) group_left
+                tenant:alert_threshold:connections_critical
+              )
             for: 30s
             labels:
               severity: warning
             annotations:
               summary: "High connections on {{ $labels.tenant }}"
-              description: "{{ $value }} threads connected (threshold exceeded)"
+              description: "{{ $value }} threads connected (warning threshold exceeded)"
+
+          # Scenario D: Critical tier — fires only when critical threshold is set and exceeded.
+          # Suppresses the warning-level MariaDBHighConnections via the unless above.
+          - alert: MariaDBHighConnectionsCritical
+            expr: |
+              (
+                tenant:mysql_threads_connected:sum
+                > on(tenant) group_left
+                tenant:alert_threshold:connections_critical
+              )
+              unless on(tenant)
+              (user_state_filter{filter="maintenance"} == 1)
+            for: 30s
+            labels:
+              severity: critical
+            annotations:
+              summary: "Critical connections on {{ $labels.tenant }}"
+              description: "{{ $value }} threads connected (critical threshold exceeded)"
+
+          # Scenario D: Composite alert — fires only when BOTH connections AND CPU
+          # exceed their respective thresholds simultaneously for the same tenant.
+          - alert: MariaDBSystemBottleneck
+            expr: |
+              (
+                (
+                  tenant:mysql_threads_connected:sum
+                  > on(tenant) group_left
+                  tenant:alert_threshold:connections
+                )
+                and on(tenant)
+                (
+                  tenant:mysql_cpu_usage:rate5m
+                  > on(tenant) group_left
+                  tenant:alert_threshold:cpu
+                )
+              )
+              unless on(tenant)
+              (user_state_filter{filter="maintenance"} == 1)
+            for: 60s
+            labels:
+              severity: critical
+            annotations:
+              summary: "System bottleneck on {{ $labels.tenant }}"
+              description: "Both connections AND CPU thresholds exceeded simultaneously"
 
           - alert: MariaDBRecentRestart
             expr: mysql_global_status_uptime < 300

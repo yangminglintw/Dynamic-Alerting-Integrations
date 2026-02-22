@@ -8,9 +8,13 @@
 ## 核心組件與架構 (Architecture)
 - **Cluster**: Kind (`dynamic-alerting-cluster`)
 - **Namespaces**: `db-a`, `db-b` (Tenants), `monitoring` (Infra)
-- **threshold-exporter** (`monitoring` ns, port 8080): 將 YAML 配置轉換為 Prometheus Metrics。支援三態邏輯 (Custom/Default/Disable)。
+- **threshold-exporter** (`monitoring` ns, port 8080): 將 YAML 配置轉換為 Prometheus Metrics。支援三態邏輯 (Custom/Default/Disable)。支援 `_critical` 後綴產生多層級嚴重度 threshold。`default_state` 欄位控制 state_filter 預設行為。
 - **kube-state-metrics**: 提供 K8s 狀態指標 (Scenario C 依賴)。
 - **Prometheus Normalization Layer**: 統一指標命名格式 `tenant:<component>_<metric>:<function>`。
+- **Scenario D 機制**:
+  - 維護模式: `_state_maintenance: enable` → `user_state_filter{filter="maintenance"}=1` → `unless` 抑制所有常規 alert。
+  - 複合警報: `MariaDBSystemBottleneck` = `connections > threshold AND cpu > threshold`。
+  - 多層級嚴重度: `mysql_connections_critical: "90"` → 額外 `severity="critical"` threshold；Warning alert 含 `unless` 降級。
 
 ## 開發與操作規範 (Strict Rules)
 1. **ConfigMap 修改規範 (重要)**：絕對**禁止**在測試腳本或指令中使用 `cat <<EOF` 整包覆寫 `threshold-config`。必須使用 `kubectl patch`、`helm upgrade`，或呼叫 `update-config` skill 進行局部更新，以免洗掉其他設定。
