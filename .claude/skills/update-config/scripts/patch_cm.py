@@ -1,94 +1,61 @@
 #!/usr/bin/env python3
-import sys
-import yaml # 需要 pip install pyyaml
 import subprocess
+import yaml
+import sys
 import json
-import argparse
 
-# 設定目標
-NAMESPACE = "monitoring"
-CONFIGMAP_NAME = "threshold-config"
-KEY_IN_CM = "config.yaml"
+def run_cmd(cmd):
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"Error executing: {cmd}\n{result.stderr}", file=sys.stderr)
+        sys.exit(1)
+    return result.stdout.strip()
 
-def get_current_config():
-    """從 K8s 獲取當前的 ConfigMap YAML"""
-    try:
-        # 使用 kubectl 抓取特定的 key
-        cmd = ["kubectl", "get", "cm", CONFIGMAP_NAME, "-n", NAMESPACE, "-o", "jsonpath={.data['config\\.yaml']}"]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        # 解析 YAML
-        return yaml.safe_load(result.stdout)
-    except subprocess.CalledProcessError as e:
-        print(f"Error fetching ConfigMap: {e.stderr}", file=sys.stderr)
+def main(tenant, metric_key, value):
+    # 1. 獲取現有 ConfigMap
+    cm_json = run_cmd("kubectl get configmap threshold-config -n monitoring -o json")
+    cm_data = json.loads(cm_json)
+    
+    config_yaml_str = cm_data.get("data", {}).get("config.yaml", "")
+    if not config_yaml_str:
+        print("Error: config.yaml not found in ConfigMap.", file=sys.stderr)
         sys.exit(1)
 
-def apply_config(new_config_data):
-    """將修改後的 Config 寫回 K8s"""
-    # 轉回 YAML 字串 (不使用 flow style 以保持可讀性)
-    yaml_str = yaml.dump(new_config_data, default_flow_style=False, sort_keys=False)
+    # 2. 解析 YAML
+    config = yaml.safe_load(config_yaml_str)
     
-    # 建構 Patch JSON (只更新 data 部分)
+    if "tenants" not in config:
+        config["tenants"] = {}
+    if tenant not in config["tenants"]:
+        config["tenants"][tenant] = {}
+
+    # 3. 更新特定值
+    config["tenants"][tenant][metric_key] = str(value)
+
+    # 4. 轉換回 YAML
+    updated_yaml_str = yaml.dump(config, sort_keys=False)
+
+    # 5. 準備 Patch JSON
     patch_data = {
         "data": {
-            KEY_IN_CM: yaml_str
+            "config.yaml": updated_yaml_str
         }
     }
     
-    try:
-        # 使用 kubectl patch 進行原子更新
-        cmd = ["kubectl", "patch", "cm", CONFIGMAP_NAME, "-n", NAMESPACE, "--type=merge", "-p", json.dumps(patch_data)]
-        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
-        print(f"✓ ConfigMap '{CONFIGMAP_NAME}' updated successfully.")
-    except subprocess.CalledProcessError as e:
-        print(f"Error patching ConfigMap: {e}", file=sys.stderr)
-        sys.exit(1)
+    # 6. 執行 Patch
+    import tempfile
+    import os
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as temp:
+        json.dump(patch_data, temp)
+        temp_path = temp.name
 
-def update_tenant(config, tenant, metric, value, priority=None):
-    """修改記憶體中的 Config 物件"""
-    # 確保結構存在
-    if "tenants" not in config:
-        config["tenants"] = {}
-    
-    if tenant not in config["tenants"]:
-        config["tenants"][tenant] = {}
-    
-    # 邏輯 1: 恢復預設值 (移除 override)
-    if value.lower() == "default":
-        if metric in config["tenants"][tenant]:
-            del config["tenants"][tenant][metric]
-            print(f"  Action: Removing override for {tenant}.{metric} -> Revert to Default")
-        else:
-            print(f"  Action: {tenant}.{metric} is already default.")
-    
-    # 邏輯 2: 設定數值 (含優先級)
-    else:
-        final_val = value
-        # Week 4 Scenario D: 支援 "90:high" 格式
-        if priority:
-            final_val = f"{value}:{priority}"
-            
-        config["tenants"][tenant][metric] = final_val
-        print(f"  Action: Set {tenant}.{metric} = {final_val}")
-
-def main():
-    # 定義指令參數
-    parser = argparse.ArgumentParser(description="Patch threshold-config ConfigMap safely.")
-    parser.add_argument("tenant", help="Target tenant (e.g., db-a)")
-    parser.add_argument("metric", help="Metric key (e.g., mysql_connections, container_cpu)")
-    parser.add_argument("value", help="Value (number, 'disable', or 'default')")
-    parser.add_argument("--priority", help="Optional priority tag (e.g., high, critical)")
-    
-    args = parser.parse_args()
-
-    # 執行流程
-    print(f"Patching {NAMESPACE}/{CONFIGMAP_NAME}...")
-    try:
-        config = get_current_config()
-        update_tenant(config, args.tenant, args.metric, args.value, args.priority)
-        apply_config(config)
-    except Exception as e:
-        print(f"Unexpected error: {e}", file=sys.stderr)
-        sys.exit(1)
+    print(f"Patching ConfigMap for {tenant}: {metric_key} = {value}...")
+    run_cmd(f"kubectl patch configmap threshold-config -n monitoring --type merge --patch-file {temp_path}")
+    os.remove(temp_path)
+    print("Success! Exporter will reload within its interval.")
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) != 4:
+        print("Usage: patch_cm.py <tenant> <metric_key> <value>")
+        sys.exit(1)
+    main(sys.argv[1], sys.argv[2], sys.argv[3])
