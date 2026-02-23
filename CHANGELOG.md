@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Week 4] - Composite Priority Logic (2026-02-22)
+### AWS & Industry Review Report (2026-02-23)
+- **新增 `docs/aws-industry-review.md`**: 完整技術評估報告，涵蓋 AWS CloudWatch vs Configuration as Metrics 架構比較、業界案例（Grafana Mimir overrides-exporter、Google Borgmon、Datadog、Cloudflare）、OSS 替代品驗證、組織定位分析、Prometheus 擴展限制附錄。
+- **核心結論**: 本專案屬 Prometheus/Mimir/Borgmon 系譜（O(1) rules），非 AWS O(n) alarms 模型。建議定位為 POC 成果推動監控團隊支援 per-tenant 自訂門檻。
+
 ### Scenario D: Alert Fatigue 解法
 - **Phase 1 — 維護模式**: Go `StateFilter` 新增 `default_state` 欄位 (opt-in model)。`maintenance` filter 預設停用，租戶設 `_state_maintenance: enable` 啟用。PromQL 5 條 alert rules 加 `unless on(tenant) (user_state_filter{filter="maintenance"} == 1)` 抑制。Hot-reload 驗證通過。
 - **Phase 2 — 複合警報**: 新增 `MariaDBSystemBottleneck` alert，使用 PromQL `and` 要求高連線數**且**高 CPU 同時觸發，severity=critical。含 maintenance 抑制。

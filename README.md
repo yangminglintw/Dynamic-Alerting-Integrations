@@ -1,6 +1,6 @@
 # Dynamic Alerting Integrations
 
-Kubernetes 本地測試環境，用於驗證 **Multi-Tenant Dynamic Alerting** 架構（參見 [spec.md](https://github.com/vencil/FunctionPlan/blob/main/AP_Alerts/spec.md)）。
+Kubernetes 本地測試環境，用於驗證 **Multi-Tenant Dynamic Alerting** 架構。
 
 基於 **Kind** (Kubernetes in Docker) 搭建，包含兩組 MariaDB 實例 + mysqld_exporter，以及完整的 Prometheus / Grafana / Alertmanager 監控堆疊。
 
@@ -87,7 +87,7 @@ make help               # 顯示所有可用 targets
 │   └── 03-monitoring/          # Prometheus, Grafana, Alertmanager
 ├── scripts/                    # 操作腳本 (_lib.sh, setup, verify, cleanup...)
 ├── tests/                      # 整合測試 (scenario-a/b/c.sh)
-├── docs/                       # 架構評估文件
+├── docs/                       # 架構評估與技術分析文件
 ├── .claude/skills/             # AI Agent skills (diagnose-tenant, update-config)
 ├── .devcontainer/              # Dev Container 配置
 ├── Makefile                    # 操作入口 (make help 查看所有 targets)
